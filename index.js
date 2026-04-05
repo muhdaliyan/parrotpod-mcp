@@ -100,6 +100,16 @@ app.post("/mcp", (req, res) => {
   }
 });
 
-app.get("/", (req, res) => { res.send("ParrotPod MCP (Text-Based) is Running."); });
+app.get("/docs", (req, res) => {
+  try {
+    const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
+    res.setHeader("Content-Type", "text/plain");
+    res.send(rawContent);
+  } catch (err) {
+    res.status(500).send("Error reading documentation file.");
+  }
+});
+
+app.get("/", (req, res) => { res.send("ParrotPod MCP (Text-Based) is Running. Visit /docs to view the documentation."); });
 
 export default app;
