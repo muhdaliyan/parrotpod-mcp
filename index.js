@@ -1,33 +1,12 @@
 import express from "express";
-import path from "path";
-import fs from "fs/promises";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DOCS_DIR = path.join(__dirname, "docs");
+import { DOCS } from "./docs-bundle.js";
 
 const app = express();
 app.use(express.json());
 
-// Helper to read docs
-async function getAllDocs() {
-  const files = await fs.readdir(DOCS_DIR);
-  const tsxFiles = files.filter((f) => f.endsWith(".tsx"));
-  
-  return Promise.all(
-    tsxFiles.map(async (f) => {
-      const content = await fs.readFile(path.join(DOCS_DIR, f), "utf-8");
-      return {
-        title: f.replace(".tsx", ""),
-        content,
-      };
-    })
-  );
-}
-
 /**
  * STATELESS MCP HANDLER FOR VERCEL
- * Instead of long-running SSE, we provide a standard JSON-RPC over HTTP endpoint.
+ * All documentation is bundled into DOCS (from docs-bundle.js)
  */
 app.post("/mcp", async (req, res) => {
   const { method, params, id } = req.body;
@@ -82,16 +61,15 @@ app.post("/mcp", async (req, res) => {
     // 3. Handle Tool Execution
     if (method === "tools/call") {
       const { name, arguments: args } = params;
-      const docs = await getAllDocs();
 
       if (name === "get_docs") {
-        const text = docs.map((d) => `### SECTION: ${d.title}\n${d.content}`).join("\n\n---\n\n");
+        const text = DOCS.map((d) => `### SECTION: ${d.title}\n${d.content}`).join("\n\n---\n\n");
         return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
       }
 
       if (name === "search_docs") {
         const query = (args?.query || "").toLowerCase();
-        const results = docs.filter(d => d.title.toLowerCase().includes(query) || d.content.toLowerCase().includes(query));
+        const results = DOCS.filter(d => d.title.toLowerCase().includes(query) || d.content.toLowerCase().includes(query));
         const text = results.length > 0 
           ? results.map((r) => `### MATCH FOUND: ${r.title}\n${r.content}`).join("\n\n---\n\n")
           : `No documentation found matching: "${query}"`;
@@ -101,8 +79,7 @@ app.post("/mcp", async (req, res) => {
 
     // 4. Handle Resource Read
     if (method === "resources/read") {
-      const docs = await getAllDocs();
-      const text = docs.map((d) => `### PAGE: ${d.title}\n${d.content}`).join("\n\n---\n\n");
+      const text = DOCS.map((d) => `### PAGE: ${d.title}\n${d.content}`).join("\n\n---\n\n");
       return res.json({ jsonrpc: "2.0", id, result: { contents: [{ uri: params.uri, text }] } });
     }
 
@@ -128,15 +105,8 @@ app.post("/mcp", async (req, res) => {
   }
 });
 
-// Root route for status check
 app.get("/", (req, res) => {
   res.send("ParrotPod Stateless MCP Server (Vercel-Ready) is Running. Use POST /mcp endpoint.");
 });
-
-// For local testing
-const PORT = process.env.PORT || 3000;
-if (process.env.NODE_ENV !== "production") {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-}
 
 export default app;
