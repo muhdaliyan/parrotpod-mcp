@@ -19,7 +19,7 @@ Add this server to the `mcpServers` section (replace with your actual deployed U
   "mcpServers": {
     "parrotpod-mcp": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/inspector", "https://YOUR-DEPLOYED-URL/sse"]
+      "args": ["-y", "@modelcontextprotocol/inspector", "https://parrotpod.mcp/sse"]
     }
   }
 }
