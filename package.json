@@ -1,0 +1,14 @@
+{
+  "name": "parrotpod-mcp",
+  "version": "1.0.0",
+  "description": "MCP server to provide ParrotPod documentation to AI agents",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "express": "^5.2.1"
+  }
+}

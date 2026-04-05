@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "name": "parrotpod-mcp",
+  "builds": [
+    {
+      "src": "index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/sse",
+      "dest": "index.js",
+      "methods": ["GET"]
+    },
+    {
+      "src": "/messages",
+      "dest": "index.js",
+      "methods": ["POST"]
+    }
+  ]
+}
