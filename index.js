@@ -131,6 +131,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const app = express();
 
+app.get("/", (req, res) => {
+  res.send("<h1>ParrotPod MCP Server is Running</h1><p>Connect to <code>/sse</code> for the docs endpoint.</p>");
+});
+
 let transport;
 
 app.get("/sse", async (req, res) => {
@@ -148,7 +152,13 @@ app.post("/messages", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.error(`ParrotPod Docs MCP Server (SSE) running on port ${PORT}`);
-  console.error(`- Connect to: http://localhost:${PORT}/sse`);
-});
+
+// Only start the server locally (not in serverless/Vercel environments)
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.error(`ParrotPod Docs MCP Server (SSE) running on port ${PORT}`);
+    console.error(`- Connect to: http://localhost:${PORT}/sse`);
+  });
+}
+
+export default app;
