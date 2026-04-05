@@ -1,6 +1,6 @@
 import express from "express";
-import path from "path";
 import fs from "fs";
+import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -10,29 +10,44 @@ const app = express();
 app.use(express.json());
 
 /**
- * TEXT-BASED MCP HANDLER
- * Instead of complex bundles, we just read docs.txt.
- * We split the file by sections for searchability.
+ * LIVE-SYNC MCP HANDLER
+ * Instead of reading from disk, we fetch the LATEST docs from your public URL.
+ * This ensures Claude always has the most up-to-date info from your website.
  */
-function getDocSections() {
+async function getLiveDocSections() {
+  const DOCS_URL = "https://parrotpod-docs-mcp.vercel.app/docs";
+  
   try {
-    const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
+    const response = await fetch(DOCS_URL);
+    if (!response.ok) throw new Error("Failed to fetch live docs");
+    
+    const rawContent = await response.text();
+    
+    // Split the text into sections using "---" or "## SECTION:"
     const sections = rawContent.split("---").map(section => {
       const lines = section.trim().split("\n");
       const titleLine = lines.find(l => l.startsWith("## SECTION:"));
-      const title = titleLine ? titleLine.replace("## SECTION:", "").trim() : "Uncategorized";
+      const title = titleLine ? titleLine.replace("## SECTION:", "").trim() : "General Info";
       return { title, content: section.trim() };
     });
+    
     return sections;
   } catch (err) {
-    console.error("Error reading docs.txt:", err);
-    return [];
+    console.error("Live Sync Error:", err.message);
+    
+    // FALLBACK: If the internet is down, try to read the local copy
+    try {
+      const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
+      return rawContent.split("---").map(section => ({ title: "Local Cache", content: section.trim() }));
+    } catch (localErr) {
+      return [{ title: "Error", content: "Documentation currently unavailable." }];
+    }
   }
 }
 
-app.post("/mcp", (req, res) => {
+app.post("/mcp", async (req, res) => {
   const { method, params, id } = req.body;
-  const sections = getDocSections();
+  const sections = await getLiveDocSections();
 
   try {
     if (method === "tools/list") {
@@ -40,10 +55,10 @@ app.post("/mcp", (req, res) => {
         jsonrpc: "2.0", id,
         result: {
           tools: [
-            { name: "get_docs", description: "Fetch all ParrotPod documentation content", inputSchema: { type: "object", properties: {} } },
+            { name: "get_docs", description: "Fetch the latest ParrotPod documentation (Live Sync)", inputSchema: { type: "object", properties: {} } },
             { 
               name: "search_docs", 
-              description: "Search for specific terms within the documentation", 
+              description: "Search the latest docs for specific terms", 
               inputSchema: { 
                 type: "object", 
                 properties: { query: { type: "string", description: "Term to search for" } },
@@ -77,20 +92,15 @@ app.post("/mcp", (req, res) => {
       return res.json({
         jsonrpc: "2.0", id,
         result: {
-          resources: [{ uri: "docs://parrotpod/all", name: "ParrotPod Docs", description: "Master Documentation File" }]
+          resources: [{ uri: "docs://parrotpod/live", name: "ParrotPod Live Docs", description: "Documentation synced from the cloud" }]
         }
       });
-    }
-
-    if (method === "resources/read") {
-      const text = fs.readFileSync(DOCS_PATH, "utf-8");
-      return res.json({ jsonrpc: "2.0", id, result: { contents: [{ uri: params.uri, text }] } });
     }
 
     if (method === "initialize") {
       return res.json({
         jsonrpc: "2.0", id,
-        result: { protocolVersion: "2025-11-25", capabilities: { resources: {}, tools: {} }, serverInfo: { name: "parrotpod-docs", version: "1.0.0" } }
+        result: { protocolVersion: "2025-11-25", capabilities: { resources: {}, tools: {} }, serverInfo: { name: "parrotpod-docs-live", version: "1.1.0" } }
       });
     }
 
@@ -100,6 +110,7 @@ app.post("/mcp", (req, res) => {
   }
 });
 
+// We keep the /docs route so the server can "feed" itself or be checked by you
 app.get("/docs", (req, res) => {
   try {
     const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
@@ -110,6 +121,6 @@ app.get("/docs", (req, res) => {
   }
 });
 
-app.get("/", (req, res) => { res.send("ParrotPod MCP (Text-Based) is Running. Visit /docs to view the documentation."); });
+app.get("/", (req, res) => { res.send("ParrotPod Live-Sync MCP is Running."); });
 
 export default app;
