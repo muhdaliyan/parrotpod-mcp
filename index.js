@@ -9,75 +9,109 @@ import {
   ReadResourceRequestSchema,
   ListToolsRequestSchema,
   CallToolRequestSchema,
-  InitializeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+
+/**
+ * PARROTPOD CLEAN MCP SEARCHER
+ * Optimized for documentation retrieval and keyword searching.
+ */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_PATH = path.join(__dirname, "docs.txt");
 
 const app = express();
+app.use(express.json());
 
-/**
- * UNIVERSAL MCP SERVER FOR VERCEL
- * This version supports standard SSE, so friends don't need a local bridge file!
- */
-
+// Initialize MCP Server
 const mcpServer = new Server({
-  name: "parrotpod-docs-universal",
-  version: "1.2.0",
+  name: "parrotpod-docs-searcher",
+  version: "2.0.0",
 }, {
   capabilities: { resources: {}, tools: {} }
 });
 
-// Helper to get doc sections (Live Sync from itself)
-async function getDocSections() {
+// Helper to parse sections from docs.txt dynamically
+function getDocSections() {
   try {
+    if (!fs.existsSync(DOCS_PATH)) return [];
     const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
     return rawContent.split("---").map(section => {
-      const lines = section.trim().split("\n");
-      const titleLine = lines.find(l => l.startsWith("## SECTION:"));
-      const title = titleLine ? titleLine.replace("## SECTION:", "").trim() : "General Info";
-      return { title, content: section.trim() };
-    });
+      const trimmed = section.trim();
+      const titleLine = trimmed.split("\n").find(l => l.startsWith("## SECTION:"));
+      const title = titleLine ? titleLine.replace("## SECTION:", "").trim() : "General Information";
+      return { title, content: trimmed || "No content available." };
+    }).filter(s => s.content.length > 5); // Filter out empty/trivial sections
   } catch (err) {
-    return [{ title: "Error", content: "Documentation currently unavailable." }];
+    console.error("Critical error reading docs.txt:", err);
+    return [];
   }
 }
 
-// 1. Tool Logic
+// 1. TOOL HANDLERS
 mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
-    { name: "get_docs", description: "Fetch all ParrotPod documentation", inputSchema: { type: "object", properties: {} } },
-    { name: "search_docs", description: "Search the docs", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+    { 
+      name: "search_docs", 
+      description: "Search ParrotPod documentation for specific technical information, setup guides, or feature details.", 
+      inputSchema: { 
+        type: "object", 
+        properties: { 
+          query: { type: "string", description: "Search query or keyword (e.g., 'LiveKit', 'telephony', 'setup')" } 
+        }, 
+        required: ["query"] 
+      } 
+    },
+    { 
+      name: "get_full_documentation", 
+      description: "Retrieve all ParrotPod documentation at once.", 
+      inputSchema: { type: "object", properties: {} } 
+    }
   ]
 }));
 
 mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const sections = await getDocSections();
-  if (request.params.name === "get_docs") {
-    const text = sections.map(s => s.content).join("\n\n---\n\n");
-    return { content: [{ type: "text", text }] };
+  const sections = getDocSections();
+  const { name, arguments: args } = request.params;
+
+  if (name === "search_docs") {
+    const query = (args?.query || "").toLowerCase();
+    const results = sections.filter(s => 
+      s.title.toLowerCase().includes(query) || 
+      s.content.toLowerCase().includes(query)
+    );
+    
+    if (results.length === 0) return { content: [{ type: "text", text: `No documentation found for query: "${query}"` }] };
+
+    const responseText = results.map(r => `## [${r.title}]\n${r.content}`).join("\n\n---\n\n");
+    return { content: [{ type: "text", text: responseText }] };
   }
-  if (request.params.name === "search_docs") {
-    const query = (request.params.arguments?.query || "").toLowerCase();
-    const results = sections.filter(s => s.content.toLowerCase().includes(query));
-    const text = results.length > 0 ? results.map(r => r.content).join("\n\n---\n\n") : "No results.";
-    return { content: [{ type: "text", text }] };
+
+  if (name === "get_full_documentation") {
+    const responseText = sections.map(s => s.content).join("\n\n---\n\n");
+    return { content: [{ type: "text", text: responseText }] };
   }
-  throw new Error("Tool not found");
+
+  throw new Error(`Tool not found: ${name}`);
 });
 
-// 2. Resource Logic
+// 2. RESOURCE HANDLERS
 mcpServer.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: [{ uri: "docs://parrotpod/all", name: "ParrotPod Master Docs", mimeType: "text/markdown" }]
+  resources: [{ 
+    uri: "docs://parrotpod/all", 
+    name: "ParrotPod Master Documentation (Markdown)", 
+    mimeType: "text/markdown"
+  }]
 }));
 
-mcpServer.setRequestHandler(ReadResourceRequestSchema, async () => {
+mcpServer.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  if (request.params.uri === "docs://parrotpod/all") {
     const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
-    return { contents: [{ uri: "docs://parrotpod/all", text: rawContent }] };
+    return { contents: [{ uri: request.params.uri, text: rawContent, mimeType: "text/markdown" }] };
+  }
+  throw new Error("Resource not found");
 });
 
-// --- VERCEL TRANSPORT LOGIC ---
+// 3. VERCEL TRANSPORT (SSE)
 let transport = null;
 
 app.get("/sse", async (req, res) => {
@@ -89,71 +123,13 @@ app.post("/messages", async (req, res) => {
   if (transport) {
     await transport.handlePostMessage(req, res);
   } else {
-    // If transport was lost (Serverless restart), we try to re-init session.
-    // Standard clients like the inspector handle this gracefully.
     res.status(200).send("OK");
   }
 });
 
-// --- STATELESS MCP HANDLER (For connect.js Bridge) ---
-app.use(express.json()); // Ensure JSON parsing is enabled
-
-app.post("/mcp", async (req, res) => {
-  const { method, params, id } = req.body;
-  const sections = await getDocSections();
-
-  try {
-    if (method === "initialize") {
-      return res.json({ jsonrpc: "2.0", id, result: { protocolVersion: "2025-11-25", capabilities: { resources: {}, tools: {} }, serverInfo: { name: "parrotpod-docs-stateless", version: "1.2.1" } } });
-    }
-    if (method === "tools/list") {
-      return res.json({ jsonrpc: "2.0", id, result: { tools: [{ name: "get_docs", description: "Fetch all ParrotPod documentation", inputSchema: { type: "object", properties: {} } }, { name: "search_docs", description: "Search the docs", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } }] } });
-    }
-    if (method === "tools/call") {
-      const { name, arguments: args } = params;
-      if (name === "get_docs") {
-        const text = sections.map(s => s.content).join("\n\n---\n\n");
-        return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
-      }
-      if (name === "search_docs") {
-        const query = (args?.query || "").toLowerCase();
-        const results = sections.filter(s => s.content.toLowerCase().includes(query));
-        const text = results.length > 0 ? results.map(r => r.content).join("\n\n---\n\n") : "No results.";
-        return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
-      }
-    }
-    if (method === "resources/list") {
-        return res.json({ jsonrpc: "2.0", id, result: { resources: [{ uri: "docs://parrotpod/all", name: "ParrotPod Master Docs", mimeType: "text/markdown" }] } });
-    }
-    if (method === "resources/read") {
-        const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
-        return res.json({ jsonrpc: "2.0", id, result: { contents: [{ uri: "docs://parrotpod/all", text: rawContent }] } });
-    }
-    res.status(404).send("Method not found");
-  } catch (err) {
-    res.status(500).send("Internal Error");
-  }
+// DEFAULT ROUTE
+app.get("/", (req, res) => {
+  res.status(200).send("ParrotPod MCP Searcher is active. Connect via SSE at /sse");
 });
-
-// Public doc view
-app.get("/docs", (req, res) => {
-  const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
-  res.setHeader("Content-Type", "text/plain");
-  res.send(rawContent);
-});
-
-// Route for friends to "download" the bridge script instantly
-app.get("/bridge", (req, res) => {
-  try {
-    const bridgePath = path.join(__dirname, "connect.js");
-    const bridgeCode = fs.readFileSync(bridgePath, "utf-8");
-    res.setHeader("Content-Type", "text/plain");
-    res.send(bridgeCode);
-  } catch (err) {
-    res.status(500).send("Error fetching bridge script.");
-  }
-});
-
-app.get("/", (req, res) => { res.send("ParrotPod Universal MCP is Running. Use /docs to view and /bridge to get the script."); });
 
 export default app;
