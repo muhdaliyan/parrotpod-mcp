@@ -95,6 +95,46 @@ app.post("/messages", async (req, res) => {
   }
 });
 
+// --- STATELESS MCP HANDLER (For connect.js Bridge) ---
+app.use(express.json()); // Ensure JSON parsing is enabled
+
+app.post("/mcp", async (req, res) => {
+  const { method, params, id } = req.body;
+  const sections = await getDocSections();
+
+  try {
+    if (method === "initialize") {
+      return res.json({ jsonrpc: "2.0", id, result: { protocolVersion: "2025-11-25", capabilities: { resources: {}, tools: {} }, serverInfo: { name: "parrotpod-docs-stateless", version: "1.2.1" } } });
+    }
+    if (method === "tools/list") {
+      return res.json({ jsonrpc: "2.0", id, result: { tools: [{ name: "get_docs", description: "Fetch all ParrotPod documentation", inputSchema: { type: "object", properties: {} } }, { name: "search_docs", description: "Search the docs", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } }] } });
+    }
+    if (method === "tools/call") {
+      const { name, arguments: args } = params;
+      if (name === "get_docs") {
+        const text = sections.map(s => s.content).join("\n\n---\n\n");
+        return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
+      }
+      if (name === "search_docs") {
+        const query = (args?.query || "").toLowerCase();
+        const results = sections.filter(s => s.content.toLowerCase().includes(query));
+        const text = results.length > 0 ? results.map(r => r.content).join("\n\n---\n\n") : "No results.";
+        return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
+      }
+    }
+    if (method === "resources/list") {
+        return res.json({ jsonrpc: "2.0", id, result: { resources: [{ uri: "docs://parrotpod/all", name: "ParrotPod Master Docs", mimeType: "text/markdown" }] } });
+    }
+    if (method === "resources/read") {
+        const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
+        return res.json({ jsonrpc: "2.0", id, result: { contents: [{ uri: "docs://parrotpod/all", text: rawContent }] } });
+    }
+    res.status(404).send("Method not found");
+  } catch (err) {
+    res.status(500).send("Internal Error");
+  }
+});
+
 // Public doc view
 app.get("/docs", (req, res) => {
   const rawContent = fs.readFileSync(DOCS_PATH, "utf-8");
