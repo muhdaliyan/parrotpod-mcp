@@ -1,0 +1,112 @@
+# PARROTPOD MASTER DOCUMENTATION (Sync from Frontend)
+
+## SECTION: ABOUT PARROTPOD
+Vision:
+ParrotPod is built by developers, for developers. Our mission is to democratize access to advanced AI technologies through a unified, powerful platform. It serves as the bridge between complex machine learning models and practical, real-world applications.
+
+Core Features:
+- Modern Stack: Built on React, FastAPI, and latest AI standards.
+- Open Source: Community-driven and transparent engineering.
+- Low Latency: Optimized for high-performance voice interactions.
+
+Built With: React, FastAPI, LiveKit, Deepgram, OpenAI, Gemini.
+
+---
+
+## SECTION: OVERVIEW
+Welcome to ParrotPod, an advanced AI-powered orchestration platform designed to streamline voice interactions, workflows, and integrations.
+
+Key Capabilities:
+- Voice-First Agents: Build cutting-edge conversational agents powered by LiveKit and high-performance LLMs.
+- Dynamic Workflows: Orchestrate complex tasks with an intuitive, real-time automation engine.
+- Seamless Integrations: Connect to your favorite tools—Deepgram, and more—with just a single configuration.
+- Developer Focused: Extensible architecture built for scalability and ease of deployment.
+
+---
+
+## SECTION: LOCAL SETUP GUIDE
+Prerequisites:
+- Node.js (v18+)
+- Python (v3.10+)
+- SQLite3
+
+Environment Configuration:
+Create a .env file in your backend directory with the following variables:
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your_livekit_api_key
+LIVEKIT_API_SECRET=your_livekit_api_secret
+DEEPGRAM_API_KEY=your_deepgram_api_key
+OPENAI_API_KEY=your_openai_api_key
+DATABASE_PATH=./parrotpod.db
+FRONTEND_URL=http://localhost:3000
+
+Automated Setup:
+1. Run Unified Setup: 'npm run setup:all' (Installs all dependencies for both frontend and backend).
+2. Launch Development Servers: 'npm run dev' (Starts backend API, voice agent, and frontend dashboard).
+
+---
+
+## SECTION: GET YOUR API KEYS
+Access routes for required services:
+
+LiveKit Cloud (Free Tier):
+1. Go to cloud.livekit.io
+2. Create a project.
+3. Settings > Keys.
+4. Copy URL, API Key, and API Secret.
+
+Deepgram ($200 Free Credits):
+1. Sign up at console.deepgram.com
+2. Create an API Key with 'Administrator' role.
+
+Google AI Studio (Gemini - Free with Limits):
+1. Visit aistudio.google.com
+2. Generate a new API key.
+
+OpenAI (Paid / Credits):
+1. Sign up at platform.openai.com
+2. Billing > Add credits.
+3. API Keys > Create Secret Key.
+
+---
+
+## SECTION: DEPLOYMENT GUIDE (RENDER)
+Steps for cloud deployment:
+1. Repository Setup: Connect your GitHub repo to Render.
+2. Service Creation: Create a new Web Service; Render detects the Dockerfile automatically.
+3. Region & Runtime: Select Docker runtime and your preferred region.
+4. Environment Variables: Add LIVEKIT_URL, DEEPGRAM_API_KEY, and OPENAI_API_KEY to Render settings.
+
+SPA Routing (Important):
+Configure Render redirect rules to handle path-based routing:
+- Source: /*
+- Destination: /index.html
+- Action: Rewrite
+
+---
+
+## SECTION: TELEPHONY & VOICE
+Connect your AI agents to the real world:
+
+1. Get a LiveKit Number:
+- Log in to LiveKit Cloud > Telephony.
+- Phone Numbers > Buy Number (One free number included).
+- Select area code and finalize.
+
+2. Manage in ParrotPod:
+- Inventory Tab: Your number appears under "My Numbers".
+- Automatic Dispatch: Assign a number to an agent, and ParrotPod automatically creates a Dispatch Rule to route calls instantly.
+
+Features:
+- Real-time call logs.
+- Seamless agent assignment.
+- SIP trunking support.
+
+---
+
+## SECTION: TOOLS & INTEGRATIONS
+Supported ecosystem:
+- Deepgram: Real-time transcription and speech-to-text intelligence.
+- LiveKit: WebRTC infrastructure for ultra-low latency media processing.
+- OpenAI & Gemini: Intelligent LLMs for contextual responses and function calling.
+- Custom Tools: Extensible architecture to add your own APIs and models.
