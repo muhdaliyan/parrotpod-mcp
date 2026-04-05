@@ -1,8 +1,10 @@
+#!/usr/bin/env node
 import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   ListResourcesRequestSchema,
@@ -111,25 +113,35 @@ mcpServer.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   throw new Error("Resource not found");
 });
 
-// 3. VERCEL TRANSPORT (SSE)
-let transport = null;
+// 3. TRANSPORT HANDLERS
+// Check if we are running in a serverless/web environment (Vercel/Express)
+if (process.env.VERCEL || process.env.PORT) {
+  let transport = null;
 
-app.get("/sse", async (req, res) => {
-  transport = new SSEServerTransport("/messages", res);
-  await mcpServer.connect(transport);
-});
+  app.get("/sse", async (req, res) => {
+    transport = new SSEServerTransport("/messages", res);
+    await mcpServer.connect(transport);
+  });
 
-app.post("/messages", async (req, res) => {
-  if (transport) {
-    await transport.handlePostMessage(req, res);
-  } else {
-    res.status(200).send("OK");
-  }
-});
+  app.post("/messages", async (req, res) => {
+    if (transport) {
+      await transport.handlePostMessage(req, res);
+    } else {
+      res.status(200).send("OK");
+    }
+  });
 
-// DEFAULT ROUTE
-app.get("/", (req, res) => {
-  res.status(200).send("ParrotPod MCP Searcher is active. Connect via SSE at /sse");
-});
+  // Default web info route
+  app.get("/", (req, res) => {
+    res.status(200).send("ParrotPod MCP Searcher is active. Connect via SSE at /sse");
+  });
+} else {
+  // Otherwise, fallback to Stdio for local CLI/npx usage
+  const transport = new StdioServerTransport();
+  mcpServer.connect(transport).catch(error => {
+    console.error("MCP Server Error:", error);
+    process.exit(1);
+  });
+}
 
 export default app;

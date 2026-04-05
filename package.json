@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "description": "Clean MCP Documentation Searcher for ParrotPod",
   "main": "index.js",
+  "bin": {
+    "parrotpod-mcp": "./index.js"
+  },
   "type": "module",
   "scripts": {
     "start": "node index.js"
