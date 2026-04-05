@@ -9,14 +9,8 @@
   ],
   "routes": [
     {
-      "src": "/sse",
-      "dest": "index.js",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/messages",
-      "dest": "index.js",
-      "methods": ["POST"]
+      "src": "/(.*)",
+      "dest": "index.js"
     }
   ]
 }
