@@ -1,204 +1,142 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
-import {
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import fs from "fs/promises";
 import path from "path";
-import { fileURLToPath } from 'url';
+import fs from "fs/promises";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_DIR = path.join(__dirname, "docs");
 
-const server = new Server(
-  {
-    name: "parrotpod-mcp",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      resources: {},
-      tools: {},
-    },
-  }
-);
+const app = express();
+app.use(express.json());
 
-/**
- * Helper to get all documentation files and their content.
- */
+// Helper to read docs
 async function getAllDocs() {
-  try {
-    const files = await fs.readdir(DOCS_DIR);
-    const docs = [];
-    for (const file of files) {
-      if (file.endsWith(".tsx")) {
-        const content = await fs.readFile(path.join(DOCS_DIR, file), "utf-8");
-        docs.push({
-          title: file.replace(".tsx", ""),
-          content: content,
-        });
-      }
-    }
-    return docs;
-  } catch (err) {
-    console.error("Error reading docs directory:", err);
-    return [];
-  }
+  const files = await fs.readdir(DOCS_DIR);
+  const tsxFiles = files.filter((f) => f.endsWith(".tsx"));
+  
+  return Promise.all(
+    tsxFiles.map(async (f) => {
+      const content = await fs.readFile(path.join(DOCS_DIR, f), "utf-8");
+      return {
+        title: f.replace(".tsx", ""),
+        content,
+      };
+    })
+  );
 }
 
 /**
- * Handler for listing available resources.
+ * STATELESS MCP HANDLER FOR VERCEL
+ * Instead of long-running SSE, we provide a standard JSON-RPC over HTTP endpoint.
  */
-server.setRequestHandler(ListResourcesRequestSchema, async () => {
-  return {
-    resources: [
-      {
-        uri: "docs://parrotpod/all",
-        name: "ParrotPod Full Documentation",
-        description: "Contains all setup, deployment, and usage guides for ParrotPod",
-        mimeType: "text/markdown",
-      },
-    ],
-  };
-});
+app.post("/mcp", async (req, res) => {
+  const { method, params, id } = req.body;
 
-/**
- * Handler for reading resources.
- */
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  if (request.params.uri === "docs://parrotpod/all") {
-    const docs = await getAllDocs();
-    const fullMarkdown = docs
-      .map((d) => `# SECTION: ${d.title}\n\n${d.content}\n\n---`)
-      .join("\n\n");
-
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: "text/markdown",
-          text: fullMarkdown,
-        },
-      ],
-    };
-  }
-  throw new Error("Resource not found");
-});
-
-/**
- * Handler for listing available tools.
- */
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "get_docs",
-        description: "Fetch all ParrotPod documentation content",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-      {
-        name: "search_docs",
-        description: "Search for specific terms within the documentation",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "The term or phrase to search for (e.g., 'OpenAI', 'Docker', 'SQLite')"
-            }
-          },
-          required: ["query"]
-        },
-      },
-    ],
-  };
-});
-
-/**
- * Handler for calling tools.
- */
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "get_docs") {
-    const docs = await getAllDocs();
-    const text = docs
-      .map((d) => `### SECTION: ${d.title}\n${d.content}`)
-      .join("\n\n---\n\n");
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: text,
-        },
-      ],
-    };
-  }
-
-  if (request.params.name === "search_docs") {
-    const query = (request.params.arguments?.query || "").toLowerCase();
-    const docs = await getAllDocs();
-    
-    const results = docs.filter(d => 
-      d.title.toLowerCase().includes(query) || 
-      d.content.toLowerCase().includes(query)
-    );
-
-    if (results.length === 0) {
-      return {
-        content: [{ type: "text", text: `No documentation found matching: "${query}"` }],
-        isError: false
-      };
+  try {
+    // 1. Handle Tool List
+    if (method === "tools/list") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          tools: [
+            {
+              name: "get_docs",
+              description: "Fetch all ParrotPod documentation content",
+              inputSchema: { type: "object", properties: {} },
+            },
+            {
+              name: "search_docs",
+              description: "Search for specific terms within the documentation",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  query: { type: "string", description: "The term or phrase to search for" }
+                },
+                required: ["query"]
+              },
+            },
+          ],
+        }
+      });
     }
 
-    const text = results
-      .map((r) => `### MATCH FOUND: ${r.title}\n${r.content}`)
-      .join("\n\n---\n\n");
+    // 2. Handle Resource List
+    if (method === "resources/list") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          resources: [
+            {
+              uri: "docs://parrotpod/all",
+              name: "ParrotPod Full Documentation",
+              description: "Contains all setup, deployment, and usage guides",
+              mimeType: "text/markdown"
+            }
+          ]
+        }
+      });
+    }
 
-    return {
-      content: [{ type: "text", text: text }],
-    };
+    // 3. Handle Tool Execution
+    if (method === "tools/call") {
+      const { name, arguments: args } = params;
+      const docs = await getAllDocs();
+
+      if (name === "get_docs") {
+        const text = docs.map((d) => `### SECTION: ${d.title}\n${d.content}`).join("\n\n---\n\n");
+        return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
+      }
+
+      if (name === "search_docs") {
+        const query = (args?.query || "").toLowerCase();
+        const results = docs.filter(d => d.title.toLowerCase().includes(query) || d.content.toLowerCase().includes(query));
+        const text = results.length > 0 
+          ? results.map((r) => `### MATCH FOUND: ${r.title}\n${r.content}`).join("\n\n---\n\n")
+          : `No documentation found matching: "${query}"`;
+        return res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } });
+      }
+    }
+
+    // 4. Handle Resource Read
+    if (method === "resources/read") {
+      const docs = await getAllDocs();
+      const text = docs.map((d) => `### PAGE: ${d.title}\n${d.content}`).join("\n\n---\n\n");
+      return res.json({ jsonrpc: "2.0", id, result: { contents: [{ uri: params.uri, text }] } });
+    }
+
+    // 5. Handshake (initialize)
+    if (method === "initialize") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          protocolVersion: "2025-11-25",
+          capabilities: { resources: {}, tools: {} },
+          serverInfo: { name: "parrotpod-docs", version: "1.0.0" }
+        }
+      });
+    }
+
+    // Final Fallback
+    return res.status(404).json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ jsonrpc: "2.0", id, error: { code: -32603, message: "Internal server error" } });
   }
-
-  throw new Error("Tool not found");
 });
 
-const app = express();
-
+// Root route for status check
 app.get("/", (req, res) => {
-  res.send("<h1>ParrotPod MCP Server is Running</h1><p>Connect to <code>/sse</code> for the docs endpoint.</p>");
+  res.send("ParrotPod Stateless MCP Server (Vercel-Ready) is Running. Use POST /mcp endpoint.");
 });
 
-let transport;
-
-app.get("/sse", async (req, res) => {
-  transport = new SSEServerTransport("/messages", res);
-  await server.connect(transport);
-  console.error("SSE Connection established");
-});
-
-app.post("/messages", async (req, res) => {
-  if (transport) {
-    await transport.handlePostMessage(req, res);
-  } else {
-    res.status(404).send("No active SSE session");
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-
-// Only start the server locally (not in serverless/Vercel environments)
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.error(`ParrotPod Docs MCP Server (SSE) running on port ${PORT}`);
-    console.error(`- Connect to: http://localhost:${PORT}/sse`);
-  });
+// For local testing
+const PORT = process.env.PORT || 3000;
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }
 
 export default app;

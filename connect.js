@@ -1,67 +1,79 @@
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
   ListToolsRequestSchema,
   CallToolRequestSchema,
+  InitializeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
 /**
- * BRIDGING CLAUDE (STDIO) TO VERCEL (SSE)
+ * STATELESS VERCEL BRIDGE
+ * This script runs locally on your laptop. 
+ * It forwards Claude's requests to Vercel via standard HTTP POST.
  */
 
-const VERCEL_URL = "https://parrotpod-docs-mcp.vercel.app/sse";
+const VERCEL_URL = "https://parrotpod-docs-mcp.vercel.app/mcp";
 
-async function bridge() {
-  console.error("Initiating bridge to Vercel...");
-  
-  // 1. Setup Stdio for Claude
-  const stdioTransport = new StdioServerTransport();
-  
-  // 2. Setup SSE for Vercel
-  const sseTransport = new SSEClientTransport(new URL(VERCEL_URL));
-  
-  // 3. Create a client that talks to Vercel
-  const client = new Client({ name: "bridge-client", version: "1.0.0" }, { capabilities: {} });
-  await client.connect(sseTransport);
+const server = new Server({
+  name: "parrotpod-mcp-bridge",
+  version: "1.0.0",
+}, {
+  capabilities: {
+    resources: {},
+    tools: {},
+  }
+});
 
-  // 4. Create a server that Claude talks to 
-  const server = new Server({ name: "parrotpod-mcp-bridge", version: "1.0.0" }, {
-    capabilities: {
-      resources: {},
-      tools: {}
+// Using native cloud-ready fetch (Node 18+)
+async function callVercel(method, params, id) {
+  try {
+    const response = await fetch(VERCEL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method, params, id }),
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Vercel responded with ${response.status}`);
     }
-  });
-
-  // Relay Tool List
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return await client.listTools();
-  });
-
-  // Relay Tool Call
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    return await client.callTool(request.params.name, request.params.arguments);
-  });
-
-  // Relay Resource List
-  server.setRequestHandler(ListResourcesRequestSchema, async () => {
-    return await client.listResources();
-  });
-
-  // Relay Resource Read
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    return await client.readResource(request.params.uri);
-  });
-
-  // Finalize connection with Claude
-  await server.connect(stdioTransport);
-  console.error("Successfully bridged Claude to Vercel!");
+    
+    const data = await response.json();
+    return data.result;
+  } catch (err) {
+    throw err;
+  }
 }
 
-bridge().catch((err) => {
-  console.error("Bridge Error (Verify your Vercel URL):", err);
+// 1. Handshake
+server.setRequestHandler(InitializeRequestSchema, async (request) => {
+  return await callVercel("initialize", request.params, request.id);
+});
+
+// 2. Tools
+server.setRequestHandler(ListToolsRequestSchema, async (request) => {
+  return await callVercel("tools/list", request.params, request.id);
+});
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  return await callVercel("tools/call", request.params, request.id);
+});
+
+// 3. Resources
+server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+  return await callVercel("resources/list", request.params, request.id);
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  return await callVercel("resources/read", request.params, request.id);
+});
+
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((err) => {
   process.exit(1);
 });
