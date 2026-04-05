@@ -97,10 +97,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "get_docs",
-        description: "Fetch all ParrotPod documentation content for AI context",
+        description: "Fetch all ParrotPod documentation content",
         inputSchema: {
           type: "object",
           properties: {},
+        },
+      },
+      {
+        name: "search_docs",
+        description: "Search for specific terms within the documentation",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The term or phrase to search for (e.g., 'OpenAI', 'Docker', 'SQLite')"
+            }
+          },
+          required: ["query"]
         },
       },
     ],
@@ -126,6 +140,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ],
     };
   }
+
+  if (request.params.name === "search_docs") {
+    const query = (request.params.arguments?.query || "").toLowerCase();
+    const docs = await getAllDocs();
+    
+    const results = docs.filter(d => 
+      d.title.toLowerCase().includes(query) || 
+      d.content.toLowerCase().includes(query)
+    );
+
+    if (results.length === 0) {
+      return {
+        content: [{ type: "text", text: `No documentation found matching: "${query}"` }],
+        isError: false
+      };
+    }
+
+    const text = results
+      .map((r) => `### MATCH FOUND: ${r.title}\n${r.content}`)
+      .join("\n\n---\n\n");
+
+    return {
+      content: [{ type: "text", text: text }],
+    };
+  }
+
   throw new Error("Tool not found");
 });
 
