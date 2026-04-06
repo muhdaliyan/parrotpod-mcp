@@ -1,112 +1,127 @@
-# PARROTPOD MASTER DOCUMENTATION (Sync from Frontend)
-
 ## SECTION: ABOUT PARROTPOD
+ParrotPod is an advanced AI-powered orchestration platform designed for building, deploying, and managing voice-first AI agents at scale.
+
 Vision:
-ParrotPod is built by developers, for developers. Our mission is to democratize access to advanced AI technologies through a unified, powerful platform. It serves as the bridge between complex machine learning models and practical, real-world applications.
+Built by developers, for developers. It bridges the gap between complex machine learning models and real-world voice and messaging applications.
 
-Core Features:
-- Modern Stack: Built on React, FastAPI, and latest AI standards.
-- Open Source: Community-driven and transparent engineering.
-- Low Latency: Optimized for high-performance voice interactions.
+Core Capabilities:
+- Voice-First Agents: Conversational agents via LiveKit and high-performance LLMs.
+- Dynamic Workflows: Real-time automation including WhatsApp and Telegram.
+- Telephony-Ready: Assign phone numbers to agents and route calls automatically.
+- Developer Focused: Extensible, open-source architecture built for scalability.
 
-Built With: React, FastAPI, LiveKit, Deepgram, OpenAI, Gemini.
-
----
-
-## SECTION: OVERVIEW
-Welcome to ParrotPod, an advanced AI-powered orchestration platform designed to streamline voice interactions, workflows, and integrations.
-
-Key Capabilities:
-- Voice-First Agents: Build cutting-edge conversational agents powered by LiveKit and high-performance LLMs.
-- Dynamic Workflows: Orchestrate complex tasks with an intuitive, real-time automation engine.
-- Seamless Integrations: Connect to your favorite tools—Deepgram, and more—with just a single configuration.
-- Developer Focused: Extensible architecture built for scalability and ease of deployment.
+Tech Stack:
+React (Frontend), FastAPI (Backend), LiveKit (Voice/RTC), Deepgram (STT), OpenAI & Google Gemini (LLM), SQLite3 (DB).
 
 ---
 
 ## SECTION: LOCAL SETUP GUIDE
 Prerequisites:
-- Node.js (v18+)
-- Python (v3.10+)
+- Node.js v18+
+- Python v3.10+
 - SQLite3
 
-Environment Configuration:
-Create a .env file in your backend directory with the following variables:
-LIVEKIT_URL=wss://your-project.livekit.cloud
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_api_secret
-DEEPGRAM_API_KEY=your_deepgram_api_key
-OPENAI_API_KEY=your_openai_api_key
-DATABASE_PATH=./parrotpod.db
-FRONTEND_URL=http://localhost:3000
+Installation:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/muhdaliyan/ParrotPod
+   cd ParrotPod
+   ```
 
-Automated Setup:
-1. Run Unified Setup: 'npm run setup:all' (Installs all dependencies for both frontend and backend).
-2. Launch Development Servers: 'npm run dev' (Starts backend API, voice agent, and frontend dashboard).
+2. Run 'npm run setup:all' from the project root. This installs frontend dependencies, creates a Python virtual environment, and installs backend requirements.
+
+Environment Setup:
+Create a .env file in /backend with your keys (LIVEKIT_URL, DEEPGRAM_API_KEY, etc.). Use 'get_env_reference' for a full list.
+
+Launching Servers:
+Run 'npm run dev' from the project root.
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+- Voice Agent: Background worker
 
 ---
 
 ## SECTION: GET YOUR API KEYS
-Access routes for required services:
+LiveKit Cloud:
+Sign up at cloud.livekit.io. Go to Settings > Keys. Includes one free phone number.
 
-LiveKit Cloud (Free Tier):
-1. Go to cloud.livekit.io
-2. Create a project.
-3. Settings > Keys.
-4. Copy URL, API Key, and API Secret.
+Deepgram:
+Sign up at console.deepgram.com. Create an API Key with 'Administrator' role for STT.
 
-Deepgram ($200 Free Credits):
-1. Sign up at console.deepgram.com
-2. Create an API Key with 'Administrator' role.
+OpenAI & Gemini:
+- OpenAI: platform.openai.com. Recommended: gpt-4o-mini.
+- Gemini: aistudio.google.com. Recommended: gemini-1.5-flash for lowest latency.
 
-Google AI Studio (Gemini - Free with Limits):
-1. Visit aistudio.google.com
-2. Generate a new API key.
+---
 
-OpenAI (Paid / Credits):
-1. Sign up at platform.openai.com
-2. Billing > Add credits.
-3. API Keys > Create Secret Key.
+## SECTION: ENVIRONMENT REFERENCE
+- LIVEKIT_URL (wss://...): LiveKit WebSocket URL.
+- LIVEKIT_API_KEY/SECRET: Auth credentials.
+- DEEPGRAM_API_KEY: STT access.
+- OPENAI_API_KEY/GEMINI_API_KEY: LLM access.
+- DATABASE_PATH: Default is ./parrotpod.db.
+- FRONTEND_URL: Used for CORS (default: http://localhost:3000).
+
+---
+
+## SECTION: AGENT MANAGEMENT
+Creating Agents:
+Use the dashboard to create an agent. Define its name, persona, and role.
+
+Configuration:
+- LLM Provider: Use Gemini Flash for the best conversational speed.
+- System Prompt: Keep it concise. Define personality and fallback behaviors.
+- Telephony: Assign a number in the dashboard; ParrotPod creates the Dispatch Rule automatically.
+
+Workflows:
+Enable WhatsApp or Telegram in the agent's Workflows tab to receive instant notifications for captured leads or call completions.
 
 ---
 
 ## SECTION: DEPLOYMENT GUIDE (RENDER)
-Steps for cloud deployment:
-1. Repository Setup: Connect your GitHub repo to Render.
-2. Service Creation: Create a new Web Service; Render detects the Dockerfile automatically.
-3. Region & Runtime: Select Docker runtime and your preferred region.
-4. Environment Variables: Add LIVEKIT_URL, DEEPGRAM_API_KEY, and OPENAI_API_KEY to Render settings.
-
-SPA Routing (Important):
-Configure Render redirect rules to handle path-based routing:
-- Source: /*
-- Destination: /index.html
-- Action: Rewrite
+1. Repository: Ensure Dockerfile is at the project root.
+2. Service: Create a "Web Service" on Render using the Docker runtime.
+3. Env Vars: Add all secrets from your .env to the Render dashboard.
+4. SPA Routing (IMPERATIVE): Add a Rewrite Rule (Source: /* | Destination: /index.html | Action: Rewrite) to handle client-side routing.
+5. Persistence: Mount a disk at /app/backend/whatsapp_sessions/ to persist linked devices across deployments.
 
 ---
 
 ## SECTION: TELEPHONY & VOICE
-Connect your AI agents to the real world:
+Numbers:
+Purchase numbers via LiveKit Cloud. They sync to your ParrotPod Inventory automatically.
 
-1. Get a LiveKit Number:
-- Log in to LiveKit Cloud > Telephony.
-- Phone Numbers > Buy Number (One free number included).
-- Select area code and finalize.
+Dispatch Rules:
+Tells LiveKit where to route incoming calls. ParrotPod manages these rules as you assign/unassign agents to numbers.
 
-2. Manage in ParrotPod:
-- Inventory Tab: Your number appears under "My Numbers".
-- Automatic Dispatch: Assign a number to an agent, and ParrotPod automatically creates a Dispatch Rule to route calls instantly.
+SIP Trunking:
+Connect enterprise VoIP systems to ParrotPod via LiveKit's SIP infrastructure for professional telephony.
 
-Features:
-- Real-time call logs.
-- Seamless agent assignment.
-- SIP trunking support.
+---
+
+## SECTION: WHATSAPP & TELEGRAM
+WhatsApp:
+- Link Device: Scan the QR code in the Integrations panel.
+- Persistence: Sessions are saved to backend/whatsapp_sessions/.
+- Maintenance: Use 'Reset & Fix' if the QR code fails to load or connection hangs.
+
+Telegram:
+- BotFather: Create a bot and get the HTTP Token.
+- UserInfoBot: Get your numeric Chat ID.
+- Test: Click 'Test' in the Integrations panel to verify your bot can reach you.
 
 ---
 
 ## SECTION: TOOLS & INTEGRATIONS
-Supported ecosystem:
-- Deepgram: Real-time transcription and speech-to-text intelligence.
-- LiveKit: WebRTC infrastructure for ultra-low latency media processing.
-- OpenAI & Gemini: Intelligent LLMs for contextual responses and function calling.
-- Custom Tools: Extensible architecture to add your own APIs and models.
+- Deepgram: Sub-300ms Word Error Rate (WER) using Nova-2 models.
+- LiveKit: Managed WebRTC and PSTN bridging.
+- OpenAI/Gemini: Reasoning, logic, and function-calling capabilities.
+
+---
+
+## SECTION: TROUBLESHOOTING
+- Agent not picking up: Verify worker is active (npm run dev) and number is assigned.
+- Latency issues: Switch to Gemini-1.5-flash and Deepgram Nova-2. Shorten the system prompt.
+- Gemini Empty Content: Ensure conversation history starts with a 'user' message.
+- Render 404 on Refresh: Verify SPA Rewrite rules are active.
+- WhatsApp Session Lost: Ensure a persistent disk is mounted on Render.
