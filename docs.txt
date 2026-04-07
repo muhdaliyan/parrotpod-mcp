@@ -1,8 +1,8 @@
 ## SECTION: ABOUT PARROTPOD
-ParrotPod is an advanced AI-powered orchestration platform designed for building, deploying, and managing voice-first AI agents at scale.
+ParrotPod is an advanced no-code AI-powered orchestration platform designed for building, deploying, and managing voice-first AI agents at scale.
 
 Vision:
-Built by developers, for developers. It bridges the gap between complex machine learning models and real-world voice and messaging applications.
+Built for everyone—from no-code creators to developers. It bridges the gap between complex machine learning models and real-world voice and messaging applications.
 
 Core Capabilities:
 - Voice-First Agents: Conversational agents via LiveKit and high-performance LLMs.
